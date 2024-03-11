@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:match*",
-      "destination": "https://netease.yicheng.store/:match*"
+      "destination": "https://netease.roydon.asia/:match*"
     }
   ]
 }

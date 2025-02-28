@@ -248,7 +248,11 @@
               @dblclick="clickLyricLine(line.time, true)"
             >
               <div class="content">
-                <span v-if="line.contents[0]">{{ line.contents[0] }}</span>
+                <span
+                  v-if="line.contents[0]"
+                  @click.right="openLyricMenu($event, line, 0)"
+                  >{{ line.contents[0] }}</span
+                >
                 <br />
                 <span
                   v-if="
@@ -256,16 +260,38 @@
                     $store.state.settings.showLyricsTranslation
                   "
                   class="translation"
+                  @click.right="openLyricMenu($event, line, 1)"
                   >{{ line.contents[1] }}</span
                 >
               </div>
             </div>
+            <ContextMenu v-if="!noLyric" ref="lyricMenu">
+              <div class="item" @click="copyLyric(false)">{{
+                $t('contextMenu.copyLyric')
+              }}</div>
+              <div
+                v-if="
+                  rightClickLyric &&
+                  rightClickLyric.contents[1] &&
+                  $store.state.settings.showLyricsTranslation
+                "
+                class="item"
+                @click="copyLyric(true)"
+                >{{ $t('contextMenu.copyLyricWithTranslation') }}</div
+              >
+            </ContextMenu>
           </div>
         </transition>
       </div>
       <div class="close-button" @click="toggleLyrics">
         <button>
           <svg-icon icon-class="arrow-down" />
+        </button>
+      </div>
+      <div class="close-button" style="left: 24px" @click="fullscreen">
+        <button>
+          <svg-icon v-if="isFullscreen" icon-class="fullscreen-exit" />
+          <svg-icon v-else icon-class="fullscreen" />
         </button>
       </div>
     </div>
@@ -278,9 +304,10 @@
 
 import { mapState, mapMutations, mapActions } from 'vuex';
 import VueSlider from 'vue-slider-component';
+import ContextMenu from '@/components/ContextMenu.vue';
 import { formatTrackTime } from '@/utils/common';
 import { getLyric } from '@/api/track';
-import { lyricParser } from '@/utils/lyrics';
+import { lyricParser, copyLyric } from '@/utils/lyrics';
 import ButtonIcon from '@/components/ButtonIcon.vue';
 import * as Vibrant from 'node-vibrant/dist/vibrant.worker.min.js';
 import Color from 'color';
@@ -293,6 +320,7 @@ export default {
   components: {
     VueSlider,
     ButtonIcon,
+    ContextMenu,
   },
   data() {
     return {
@@ -305,6 +333,8 @@ export default {
       minimize: true,
       background: '',
       date: this.formatTime(new Date()),
+      isFullscreen: !!document.fullscreenElement,
+      rightClickLyric: null,
     };
   },
   computed: {
@@ -435,6 +465,15 @@ export default {
     this.getLyric();
     this.getCoverColor();
     this.initDate();
+    document.addEventListener('keydown', e => {
+      if (e.key === 'F11') {
+        e.preventDefault();
+        this.fullscreen();
+      }
+    });
+    document.addEventListener('fullscreenchange', () => {
+      this.isFullscreen = !!document.fullscreenElement;
+    });
   },
   beforeDestroy: function () {
     if (this.timer) {
@@ -465,6 +504,13 @@ export default {
         ':' +
         second.padStart(2, '0')
       );
+    },
+    fullscreen() {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        document.documentElement.requestFullscreen();
+      }
     },
     addToPlaylist() {
       if (!isAccountLoggedIn()) {
@@ -562,6 +608,21 @@ export default {
       }
       if (startPlay === true) {
         this.player.play();
+      }
+    },
+    openLyricMenu(e, lyric, idx) {
+      this.rightClickLyric = { ...lyric, idx };
+      this.$refs.lyricMenu.openMenu(e);
+      e.preventDefault();
+    },
+    copyLyric(withTranslation) {
+      if (this.rightClickLyric) {
+        const idx = this.rightClickLyric.idx;
+        if (!withTranslation) {
+          copyLyric(this.rightClickLyric.contents[idx]);
+        } else {
+          copyLyric(this.rightClickLyric.contents.join(' '));
+        }
       }
     },
     setLyricsInterval() {
@@ -903,6 +964,7 @@ export default {
         transform-origin: center left;
         transform: scale(0.95);
         transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        user-select: none;
 
         span {
           opacity: 0.28;
